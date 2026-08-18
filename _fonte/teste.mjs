@@ -38,7 +38,25 @@ console.log('cartoes:', await pagina.locator('.cartao').count(),
 console.log('resultado:', await pagina.locator('#resultado').textContent());
 
 await pagina.screenshot({ path: 'tela-1-topo.png' });
+await pagina.locator('.vitrine').screenshot({ path: 'tela-6-vitrine.png' });
 await pagina.screenshot({ path: 'tela-2-inteira.png', fullPage: true });
+
+// ---------- faixa dos campeoes ----------
+const vitrine = await pagina.evaluate(() => {
+  const faixa = document.querySelector(".vitrine");
+  const pista = document.querySelector(".pista");
+  const r = faixa.getBoundingClientRect();
+  return {
+    itens: document.querySelectorAll(".vitrine-item").length,
+    nomes: [...document.querySelectorAll(".vitrine-nome")].map((n) => n.textContent),
+    desenhosNaPista: pista.children.length,
+    pistaAnimada: getComputedStyle(pista).animationName,
+    dobroExato: pista.children.length % 2 === 0,
+    visivelNaPrimeiraTela: r.top < window.innerHeight && r.bottom > 0,
+    fimDaFaixa: Math.round(r.bottom),
+  };
+});
+console.log("vitrine:", JSON.stringify(vitrine));
 
 // ---------- a escada de preço ----------
 const preco = () => pagina.locator('.cartao-preco b').first().textContent();
@@ -104,12 +122,18 @@ console.log('contador apos reload:', await pagina.locator('#contador-kit').textC
 // ---------- mobile ----------
 const mob = await navegador.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 await mob.goto('http://localhost:4321/', { waitUntil: 'networkidle' });
+await mob.screenshot({ path: 'tela-7-mobile-topo.png' });
 await mob.locator('.cartao .mais').first().click();
 console.log('barra mobile visivel:', await mob.locator('#barra-kit').isVisible());
 
+await mob.evaluate(() => window.scrollTo(0, 0));
+await mob.waitForTimeout(200);
 const medidas = await mob.evaluate(() => ({
   topo: document.querySelector('.topo').offsetHeight,
   varTopo: getComputedStyle(document.documentElement).getPropertyValue('--topo-altura').trim(),
+  faixaNaPrimeiraTela: document.querySelector(".vitrine").getBoundingClientRect().bottom <= window.innerHeight,
+  fimDaFaixa: Math.round(document.querySelector(".vitrine").getBoundingClientRect().bottom),
+  alturaTela: window.innerHeight,
   chipsUmaLinha: document.querySelector('.chips').scrollHeight <= 44,
   scrollHorizontal: document.documentElement.scrollWidth > window.innerWidth,
 }));

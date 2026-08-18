@@ -37,6 +37,9 @@
       'pure-steel', 'pina-colada', 'no-smoking', 'new-car',
     ],
 
+    // Os três que aparecem na faixa do hero, antes de rolar a página.
+    vitrine: ['black-ice', 'new-car', 'vanilla-pride'],
+
     // A raspagem trouxe 57 dos 72 SKUs marcados como indisponíveis na loja de
     // origem. Enquanto o cliente não mandar o estoque real, o catálogo mostra
     // tudo. Vire pra true quando os dados estiverem corretos.
@@ -161,6 +164,41 @@
         </div>`;
       }).join('')}
       <p class="faixa-rodape">Você mistura os aromas que quiser — o preço segue o total de unidades do pedido.</p>`;
+  }
+
+  // ==========================================================================
+  // Faixa dos campeões (hero)
+  // --------------------------------------------------------------------------
+  // Os aromas ficam parados; quem anda é a pista do fundo. A pista tem o mesmo
+  // trecho duplicado e desliza até -50%, então o loop não dá salto.
+  // ==========================================================================
+  function montaPista() {
+    const desenhos = ['carro-hatch', 'arvore', 'carro-suv', 'arvore', 'carro-pickup', 'arvore'];
+    const trecho = Array.from({ length: 12 }, (_, i) => {
+      const id = desenhos[i % desenhos.length];
+      const arvore = id === 'arvore';
+      return `<svg class="passante ${arvore ? 'passante-arvore' : 'passante-carro'}" viewBox="${arvore ? '0 0 24 32' : '0 0 134 46'}">
+        <use href="#${id}" /></svg>`;
+    }).join('');
+    $('#pista').innerHTML = trecho + trecho;
+  }
+
+  function pintaVitrine() {
+    const escolhidos = CONFIG.vitrine.map((s) => porSlug.get(s)).filter(Boolean);
+    const { unidades, unitario } = totais();
+    const preco = unidades ? unitario : FAIXAS[0].preco;
+
+    $('#vitrine-itens').innerHTML = escolhidos.map((a) => {
+      const qtd = estado.kit[a.slug] || 0;
+      return `<article class="vitrine-item${qtd ? ' escolhido' : ''}">
+        <img src="${escapa(a.foto)}" alt="Little Trees ${escapa(a.nome)}" />
+        <div class="vitrine-texto">
+          <p class="vitrine-nome">${escapa(a.nome)}</p>
+          <p class="vitrine-preco">${reais(preco)}<small> /un</small></p>
+        </div>
+        ${controle(a.slug, qtd, a.nome)}
+      </article>`;
+    }).join('');
   }
 
   // ==========================================================================
@@ -428,6 +466,7 @@
 
   function repinta() {
     pintaGrade();
+    pintaVitrine();
     pintaKit();
     pintaKits();
     pintaGradeKits();
@@ -506,6 +545,7 @@
   }
   $('#hero-total').textContent = AROMAS.length;
   $('#hero-preco').textContent = reais(FAIXAS[0].preco);
+  montaPista();
   montaChips();
   repinta();
   ajustaTopo();
