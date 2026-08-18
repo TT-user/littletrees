@@ -17,6 +17,13 @@ _fonte/                 a raspagem e os scripts que geram tudo acima
 
 ## Detalhes de comportamento
 
+- **A quantidade dá pra digitar**, não só clicar no mais e no menos. Aceita até
+  3 dígitos, descarta o que não for número, e as setas do teclado sobem e descem
+  de um em um. Como cada tecla pode mudar a faixa de preço e redesenhar a página,
+  o campo carrega um `data-onde` (grade, vitrine, painel ou modal) que serve pra
+  devolver o foco no lugar certo depois do redesenho. Apagar o campo só tira o
+  aroma do kit quando o visitante sai dele, senão o item sumiria no meio da
+  digitação.
 - **Sem seleção e sem cópia de texto**, a pedido. É `user-select: none` no body
   mais bloqueio dos eventos `copy`, `cut`, `selectstart` e `dragstart` no
   `loja.js`. A busca continua selecionável, senão não dá pra corrigir o que se

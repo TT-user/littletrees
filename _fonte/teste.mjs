@@ -94,6 +94,68 @@ for (const arq of ['assets/favicon.svg', 'assets/favicon-32.png', 'assets/favico
   console.log('favicon', arq, r.status());
 }
 
+// ---------- quantidade digitada ----------
+await pagina.evaluate(() => localStorage.clear());
+await pagina.reload({ waitUntil: 'networkidle' });
+await pagina.locator('.cartao .mais').first().click();
+
+const campo = pagina.locator('.cartao .qtd').first();
+await campo.click();
+await campo.press('Control+a');
+await campo.type('37', { delay: 60 });
+
+const digitado = await pagina.evaluate(() => ({
+  valorNoCampo: document.querySelector('.cartao .qtd').value,
+  focoSobreviveu: document.activeElement?.classList.contains('qtd'),
+  focoNoLugarCerto: document.activeElement?.dataset.onde,
+  contadorTopo: document.querySelector('#contador-kit').textContent,
+  precoNoCard: document.querySelector('.cartao-preco b').textContent.replace(/\u00a0/g, ' '),
+}));
+console.log('digitando 37:', JSON.stringify(digitado));
+
+// letras e numero fora do limite
+await campo.press('Control+a');
+await campo.type('9a9x9');
+console.log('so digitos:', await campo.inputValue());
+await campo.press('Control+a');
+await campo.type('4000');
+console.log('teto de 3 digitos:', await campo.inputValue(), '| estado:', await pagina.evaluate(() => Object.values(JSON.parse(localStorage.getItem('lt-kit')))[0]));
+
+// setas
+await campo.press('ArrowUp');
+console.log('depois da seta pra cima:', await pagina.locator('.cartao .qtd').first().inputValue());
+await pagina.locator('.cartao .qtd').first().press('ArrowDown');
+await pagina.locator('.cartao .qtd').first().press('ArrowDown');
+console.log('duas setas pra baixo:', await pagina.locator('.cartao .qtd').first().inputValue());
+
+// apagar e sair tira do kit
+const vivo = pagina.locator('.cartao .qtd').first();
+await vivo.click();
+await vivo.press('Control+a');
+await vivo.press('Backspace');
+console.log('campo vazio, ainda no kit:', await pagina.locator('#contador-kit').textContent());
+await pagina.locator('h1').click({ position: { x: 5, y: 5 } });
+await pagina.waitForTimeout(150);
+console.log('depois de sair do campo:', await pagina.locator('#contador-kit').textContent(),
+            '| voltou pro botao +:', await pagina.locator('.cartao .mais').first().isVisible());
+
+// digitar dentro do painel
+await pagina.locator('.cartao .mais').first().click();
+await pagina.locator('#abrir-kit').click();
+await pagina.waitForSelector('#painel:not([hidden])');
+const noPainel = pagina.locator('.painel .qtd').first();
+await noPainel.click();
+await noPainel.press('Control+a');
+await noPainel.type('12', { delay: 60 });
+console.log('painel:', JSON.stringify(await pagina.evaluate(() => ({
+  campo: document.querySelector('.painel .qtd').value,
+  foco: document.activeElement?.dataset.onde,
+  total: document.querySelector('.linha-total.grande b').textContent.replace(/\u00a0/g, ' '),
+}))));
+await pagina.keyboard.press('Escape');
+await pagina.evaluate(() => localStorage.clear());
+await pagina.reload({ waitUntil: 'networkidle' });
+
 // ---------- a escada de preço ----------
 const preco = () => pagina.locator('.cartao-preco b').first().textContent();
 const alvo = pagina.locator('.cartao [data-add]').first();
@@ -175,6 +237,17 @@ const medidas = await mob.evaluate(() => ({
 }));
 console.log('mobile:', JSON.stringify(medidas));
 await mob.screenshot({ path: 'tela-5-mobile.png' });
+
+await mob.locator(".cartao").first().scrollIntoViewIfNeeded();
+await mob.waitForTimeout(200);
+await mob.locator(".cartao").first().screenshot({ path: "tela-11-mobile-card.png" });
+const campoMob = await mob.evaluate(() => {
+  const c = document.querySelector(".cartao .qtd");
+  const card = document.querySelector(".cartao");
+  const r = c.getBoundingClientRect(), rc = card.getBoundingClientRect();
+  return { teclado: c.inputMode, largura: Math.round(r.width), altura: Math.round(r.height), dentroDoCard: r.right <= rc.right && r.left >= rc.left };
+});
+console.log("campo no mobile:", JSON.stringify(campoMob));
 
 // ---------- varredura do mobile ----------
 await mob.locator('#kits').scrollIntoViewIfNeeded();

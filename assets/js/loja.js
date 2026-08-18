@@ -133,13 +133,18 @@
   const emEstoque = (aroma) =>
     !CONFIG.respeitarEstoque || aroma.formatos.some((f) => CARTELA.has(f.formato) && f.disponivel);
 
-  function controle(slug, qtd, nome) {
+  // `onde` marca em qual lugar da página este controle está (grade, vitrine,
+  // painel ou modal). O mesmo aroma aparece em mais de um, e é isso que permite
+  // devolver o foco pro campo certo depois que a tela se redesenha.
+  function controle(slug, qtd, nome, onde) {
     if (!qtd) {
       return `<button class="mais" data-add="${slug}" aria-label="Adicionar ${escapa(nome)}">+</button>`;
     }
     return `<div class="passo-qtd">
       <button data-sub="${slug}" aria-label="Menos um ${escapa(nome)}">&minus;</button>
-      <b>${qtd}</b>
+      <input class="qtd" type="text" inputmode="numeric" autocomplete="off" maxlength="3"
+             value="${qtd}" data-qtd="${slug}" data-onde="${onde || 'grade'}"
+             aria-label="Quantidade de ${escapa(nome)}" />
       <button data-add="${slug}" aria-label="Mais um ${escapa(nome)}">+</button>
     </div>`;
   }
@@ -205,7 +210,7 @@
           <p class="vitrine-nome">${escapa(a.nome)}</p>
           <p class="vitrine-preco">${reais(preco)}<small> /un</small></p>
         </div>
-        ${controle(a.slug, qtd, a.nome)}
+        ${controle(a.slug, qtd, a.nome, 'vitrine')}
       </article>`;
     }).join('');
   }
@@ -288,7 +293,7 @@
           <p class="cartao-desc">${escapa(a.descricao || '')}</p>
           <div class="cartao-pe">
             <span class="cartao-preco"><b>${reais(preco)}</b> /un</span>
-            ${controle(a.slug, qtd, a.nome)}
+            ${controle(a.slug, qtd, a.nome, 'grade')}
           </div>
         </div>
       </article>`;
@@ -321,7 +326,7 @@
             <p class="item-kit-meta">${reais(t.unitario)} cada · ${reais(qtd * t.unitario)}</p>
             <button class="remover" data-remove="${aroma.slug}">remover</button>
           </div>
-          ${controle(aroma.slug, qtd, aroma.nome)}
+          ${controle(aroma.slug, qtd, aroma.nome, 'painel')}
         </div>`).join('');
 
       const faltam = t.proxima ? t.proxima.min - t.unidades : 0;
@@ -417,7 +422,7 @@
           <h3 class="modal-rotulo">Quanto custa</h3>
           <p class="modal-preco-grande">${reais(t.unidades ? t.unitario : FAIXAS[0].preco)}<small> por unidade${t.unidades ? ` no seu kit atual (${escapa(t.faixa.nome)})` : ''}</small></p>
           <div class="modal-acao">
-            ${controle(a.slug, qtd, a.nome)}
+            ${controle(a.slug, qtd, a.nome, 'modal')}
             <span class="modal-acao-nota">${qtd ? `${qtd} no kit` : 'adicionar ao kit'}</span>
           </div>
           <div class="mini-escada">
@@ -459,12 +464,27 @@
   // ==========================================================================
   // Mutação do kit
   // ==========================================================================
-  function muda(slug, delta) {
-    const atual = estado.kit[slug] || 0;
-    const novo = Math.max(0, Math.min(999, atual + delta));
+  const LIMITE = 999;
+
+  // Define a quantidade e, se veio de um campo digitado, devolve o foco pra ele
+  // depois do redesenho: cada tecla muda a faixa de preço e repinta a página
+  // inteira, o que destruiria o campo embaixo do dedo do visitante.
+  function defineQtd(slug, n, onde) {
+    const novo = Math.max(0, Math.min(LIMITE, n));
     if (novo) estado.kit[slug] = novo; else delete estado.kit[slug];
     salvar();
     repinta();
+
+    if (!onde) return;
+    const campo = document.querySelector(`[data-qtd="${slug}"][data-onde="${onde}"]`);
+    if (campo) {
+      campo.focus();
+      campo.setSelectionRange(campo.value.length, campo.value.length);
+    }
+  }
+
+  function muda(slug, delta) {
+    defineQtd(slug, (estado.kit[slug] || 0) + delta);
   }
 
   function remove(slug) {
@@ -511,7 +531,41 @@
     }
   });
 
+  // ---- quantidade digitada ----
+
+  document.addEventListener('input', (ev) => {
+    const campo = ev.target.closest('[data-qtd]');
+    if (!campo) return;
+
+    const limpo = campo.value.replace(/\D/g, '').slice(0, 3);
+    if (limpo !== campo.value) campo.value = limpo;
+
+    // campo vazio é alguém apagando pra digitar outro número; só some do kit
+    // quando sair do campo, senão o item desapareceria no meio da digitação
+    if (limpo === '') return;
+
+    defineQtd(campo.dataset.qtd, parseInt(limpo, 10), campo.dataset.onde);
+  });
+
+  // saiu do campo vazio ou zerado: tira o aroma do kit
+  document.addEventListener('focusout', (ev) => {
+    const campo = ev.target.closest && ev.target.closest('[data-qtd]');
+    if (!campo) return;
+    const n = parseInt(campo.value, 10);
+    if (!n) defineQtd(campo.dataset.qtd, 0);
+  });
+
   document.addEventListener('keydown', (ev) => {
+    const campo = ev.target.closest && ev.target.closest('[data-qtd]');
+    if (campo) {
+      const { qtd: slug, onde } = campo.dataset;
+      const atual = estado.kit[slug] || 0;
+      if (ev.key === 'Enter') { ev.preventDefault(); campo.blur(); }
+      if (ev.key === 'ArrowUp') { ev.preventDefault(); defineQtd(slug, atual + 1, onde); }
+      if (ev.key === 'ArrowDown') { ev.preventDefault(); defineQtd(slug, atual - 1, onde); }
+      return;
+    }
+
     if (ev.key === 'Escape') { fechaModal(); fechaPainel(); }
     if (ev.key === 'Enter' || ev.key === ' ') {
       const foco = document.activeElement;

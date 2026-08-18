@@ -239,7 +239,7 @@ button { font: inherit; color: inherit; }
 .vitrine-preco { font-size: 13px; font-weight: 700; color: var(--vermelho); }
 .vitrine-preco small { font-weight: 400; color: var(--tinta-fraca); }
 .vitrine-item .mais, .vitrine-item .passo-qtd button { width: 28px; height: 28px; font-size: 16px; }
-.vitrine-item .passo-qtd b { min-width: 18px; font-size: 14px; }
+.vitrine-item .passo-qtd .qtd { width: 36px; height: 28px; font-size: 14px; }
 
 /* ---------- filtros ---------- */
 
@@ -328,7 +328,19 @@ button { font: inherit; color: inherit; }
   cursor: pointer; font-size: 17px; line-height: 1;
 }
 .passo-qtd button:hover { border-color: var(--vermelho); color: var(--vermelho); }
-.passo-qtd b { min-width: 26px; text-align: center; font-family: Archivo, sans-serif; font-size: 15px; }
+/* a quantidade é digitável, não só clicável */
+.passo-qtd .qtd {
+  width: 42px; height: 30px; padding: 0 2px;
+  text-align: center;
+  font-family: Archivo, sans-serif; font-size: 15px; font-weight: 700;
+  color: var(--tinta); background: var(--superficie);
+  border: 1px solid var(--linha); border-radius: 8px;
+  appearance: none; -moz-appearance: textfield;
+}
+.passo-qtd .qtd:hover { border-color: var(--tinta-fraca); }
+.passo-qtd .qtd:focus { outline: 2px solid var(--vermelho); outline-offset: 1px; border-color: var(--vermelho); }
+.passo-qtd .qtd::-webkit-outer-spin-button,
+.passo-qtd .qtd::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
 .vazio { text-align: center; color: var(--tinta-fraca); padding: 48px 0 60px; }
 
@@ -518,7 +530,7 @@ button { font: inherit; color: inherit; }
   .cartao-pe { flex-wrap: wrap; row-gap: 8px; }
   .cartao-pe .passo-qtd, .cartao-pe .mais { margin-left: auto; }
   .passo-qtd button, .mais { width: 28px; height: 28px; font-size: 16px; }
-  .passo-qtd b { min-width: 20px; font-size: 14px; }
+  .passo-qtd .qtd { width: 38px; height: 28px; font-size: 14px; }
   .selo.vendido { font-size: 10px; padding: 3px 7px; }
   /* em coluna única os cinco kits viravam 1400px de rolagem */
   .grade-kits { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 24px; }
