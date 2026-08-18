@@ -1,3 +1,7 @@
+/* Smoke test no navegador: sobe a pasta num servidor local, abre o catálogo e
+   confere as contas da tabela de preços, os filtros, o painel e o link do
+   WhatsApp. Roda com `npm run teste`. */
+
 import { chromium } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -28,24 +32,56 @@ pagina.on('requestfailed', (r) => erros.push('request: ' + r.url().replace('http
 await pagina.goto('http://localhost:4321/', { waitUntil: 'networkidle' });
 
 console.log('cartoes:', await pagina.locator('.cartao').count(),
-            '| especiais:', await pagina.locator('.especial').count(),
-            '| chips:', await pagina.locator('.chip').count());
+            '| kits:', await pagina.locator('.kit').count(),
+            '| chips:', await pagina.locator('.chip').count(),
+            '| selos "mais vendido":', await pagina.locator('.selo.vendido').count());
 console.log('resultado:', await pagina.locator('#resultado').textContent());
 
 await pagina.screenshot({ path: 'tela-1-topo.png' });
 await pagina.screenshot({ path: 'tela-2-inteira.png', fullPage: true });
 
-for (let i = 0; i < 3; i++) await pagina.locator('.cartao .mais').first().click();
-console.log('contador apos 3 cliques:', await pagina.locator('#contador-kit').textContent());
+// ---------- a escada de preço ----------
+const preco = () => pagina.locator('.cartao-preco b').first().textContent();
+const alvo = pagina.locator('.cartao [data-add]').first();
 
-const mais = pagina.locator('.cartao[data-escolhido="sim"] [data-mais]').first();
-for (let i = 0; i < 4; i++) await mais.click();
-console.log('contador apos +4:', await pagina.locator('#contador-kit').textContent());
-console.log('preco no card:', await pagina.locator('.cartao-preco').first().textContent());
+// o toLocaleString do pt-BR separa "R$" do número com espaço não-quebrável
+const normal = (s) => s.replace(/ /g, ' ').trim();
 
-await pagina.locator('.chip').first().click();
-console.log('filtro familia:', await pagina.locator('#resultado').textContent());
-await pagina.locator('.chip').first().click();
+const esperado = [[1, 'R$ 19,90'], [3, 'R$ 15,00'], [10, 'R$ 12,90'], [24, 'R$ 11,90'], [50, 'R$ 9,90']];
+let cliques = 0;
+let falhas = 0;
+for (const [qtd, valor] of esperado) {
+  while (cliques < qtd) { await alvo.click(); cliques++; }
+  const lido = normal(await preco());
+  if (lido !== valor) falhas++;
+  console.log(`${String(qtd).padStart(2)} un -> ${lido} ${lido === valor ? 'ok' : 'ERRADO, esperava ' + valor}`);
+}
+
+await pagina.locator('#abrir-kit').click();
+await pagina.waitForSelector('#painel:not([hidden])');
+await pagina.waitForTimeout(400);
+console.log('faixa no painel:', (await pagina.locator('.linha-total').nth(1).textContent()).replace(/\s+/g, ' ').trim());
+console.log('total 50 un:', await pagina.locator('.linha-total.grande b').textContent());
+console.log('aviso:', await pagina.locator('.aviso-faixa').textContent());
+await pagina.screenshot({ path: 'tela-4-kit.png' });
+
+// ---------- o link do WhatsApp ----------
+const [aba] = await Promise.all([
+  pagina.waitForEvent('popup'),
+  pagina.locator('#fechar-pedido').click(),
+]);
+const url = aba.url();
+await aba.close();
+console.log('whatsapp:', url.split('?')[0]);
+console.log('--- resumo enviado ---');
+console.log(decodeURIComponent(url.split('text=')[1] || ''));
+
+await pagina.keyboard.press('Escape');
+
+// ---------- filtros ----------
+await pagina.locator('.chip.destaque').click();
+console.log('so mais vendidos:', await pagina.locator('#resultado').textContent());
+await pagina.locator('.chip.destaque').click();
 
 await pagina.locator('#busca').fill('baunilha');
 await pagina.waitForTimeout(250);
@@ -53,27 +89,13 @@ console.log('busca baunilha:', await pagina.locator('#resultado').textContent())
 await pagina.locator('#busca').fill('');
 await pagina.waitForTimeout(250);
 
+// ---------- modal ----------
 await pagina.locator('.cartao-foto').first().click();
-await pagina.waitForSelector('#modal-caixa .formato');
+await pagina.waitForSelector('.mini-escada');
 console.log('modal:', await pagina.locator('#modal-titulo').textContent(),
-            '| formatos:', await pagina.locator('#modal-caixa .formato').count());
+            '| preco:', (await pagina.locator('.modal-preco-grande').textContent()).replace(/\s+/g, ' ').trim());
 await pagina.waitForTimeout(300);
 await pagina.screenshot({ path: 'tela-3-modal.png' });
-await pagina.keyboard.press('Escape');
-
-await pagina.locator('.especial .mais').first().click();
-
-await pagina.locator('#abrir-kit').click();
-await pagina.waitForSelector('#painel:not([hidden])');
-await pagina.waitForTimeout(400);
-console.log('itens no painel:', await pagina.locator('.item-kit').count());
-console.log('total:', await pagina.locator('.linha-total.grande b').textContent());
-console.log('aviso:', await pagina.locator('.aviso-faixa').allTextContents());
-await pagina.screenshot({ path: 'tela-4-kit.png' });
-
-pagina.on('dialog', async (d) => { console.log('--- mensagem ---\n' + d.message()); await d.dismiss(); });
-await pagina.locator('#fechar-pedido').click();
-await pagina.waitForTimeout(400);
 await pagina.keyboard.press('Escape');
 
 await pagina.reload({ waitUntil: 'networkidle' });
@@ -85,30 +107,16 @@ await mob.goto('http://localhost:4321/', { waitUntil: 'networkidle' });
 await mob.locator('.cartao .mais').first().click();
 console.log('barra mobile visivel:', await mob.locator('#barra-kit').isVisible());
 
-const medidas = await mob.evaluate(() => {
-  const topo = document.querySelector('.topo');
-  const chips = document.querySelector('.chips');
-  const filtros = document.querySelector('.filtros');
-  return {
-    topo: topo.offsetHeight,
-    varTopo: getComputedStyle(document.documentElement).getPropertyValue('--topo-altura').trim(),
-    filtrosTop: Math.round(filtros.getBoundingClientRect().top),
-    chipsUmaLinha: chips.scrollHeight <= 44,
-    seloSobEncomenda: document.querySelectorAll('.selo.fora').length,
-    scrollHorizontal: document.documentElement.scrollWidth > window.innerWidth,
-  };
-});
+const medidas = await mob.evaluate(() => ({
+  topo: document.querySelector('.topo').offsetHeight,
+  varTopo: getComputedStyle(document.documentElement).getPropertyValue('--topo-altura').trim(),
+  chipsUmaLinha: document.querySelector('.chips').scrollHeight <= 44,
+  scrollHorizontal: document.documentElement.scrollWidth > window.innerWidth,
+}));
 console.log('mobile:', JSON.stringify(medidas));
 await mob.screenshot({ path: 'tela-5-mobile.png' });
 
-// o card mais alto e o mais baixo, pra ver se o rodape do card corta
-const cards = await mob.evaluate(() => {
-  const alturas = [...document.querySelectorAll('.cartao')].map((c) => c.offsetHeight);
-  return { min: Math.min(...alturas), max: Math.max(...alturas) };
-});
-console.log('altura dos cards no mobile:', JSON.stringify(cards));
-
-console.log('\nERROS:', erros.length);
+console.log('\nERROS:', erros.length, '| precos errados:', falhas);
 erros.forEach((e) => console.log('  ', e));
 
 await navegador.close();

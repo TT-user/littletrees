@@ -5,25 +5,37 @@
   'use strict';
 
   // ==========================================================================
-  // CONFIGURAÇÃO — o que precisa ser confirmado com o cliente antes de publicar
+  // TABELA DE PREÇOS (passada pelo cliente em 18/08/2026)
+  // --------------------------------------------------------------------------
+  // A unidade avulsa é R$ 20,00 na loja; aqui vai a R$ 19,90 por ser mais
+  // chamativo. Daí pra baixo os kits são por quantidade TOTAL do pedido — o
+  // cliente pode misturar os aromas que quiser dentro do kit.
+  //
+  //   1 a 2 un ....... R$ 19,90 cada
+  //   3 a 9 un ....... R$ 15,00 cada   (definido pelo cliente)
+  //   10 a 23 un ..... R$ 12,90 cada   (definido pelo cliente)
+  //   24 a 49 un ..... R$ 11,90 cada   (sugestão nossa, continuando a escada)
+  //   50 un ou mais .. R$  9,90 cada   (sugestão nossa, faixa de revenda)
+  //
+  // Só as duas últimas faixas são sugestão — confirmar com o cliente.
   // ==========================================================================
+  const FAIXAS = [
+    { min: 1,  max: 2,        preco: 19.90, nome: 'Unidade avulsa', nota: 'pra levar um aroma só' },
+    { min: 3,  max: 9,        preco: 15.00, nome: 'Kit 3',          nota: 'pra conhecer os aromas' },
+    { min: 10, max: 23,       preco: 12.90, nome: 'Kit 10',         nota: 'o carro e a casa o ano todo' },
+    { min: 24, max: 49,       preco: 11.90, nome: 'Pacote 24',      nota: 'a caixa fechada' },
+    { min: 50, max: Infinity, preco: 9.90,  nome: 'Kit revenda',    nota: 'a partir de 50 unidades' },
+  ];
+
   const CONFIG = {
-    // Número do WhatsApp que recebe os pedidos, formato 55DDDNUMERO.
-    // Vazio = o botão copia a mensagem em vez de abrir o WhatsApp.
-    whatsapp: '',
+    // Número que recebe os pedidos, formato 55DDDNUMERO.
+    whatsapp: '5532998151131',
 
-    // Preço da cartela avulsa por faixa de quantidade. PROVISÓRIO: montado a
-    // partir dos poucos preços que a loja de origem ainda exibia
-    // (avulsa R$ 13,90–14,90 e kit de 6 por R$ 74,90 = R$ 12,48/un).
-    faixas: [
-      { min: 1,  max: 5,        preco: 14.90 },
-      { min: 6,  max: 11,       preco: 12.90 },
-      { min: 12, max: 23,       preco: 11.90 },
-      { min: 24, max: Infinity, preco: 9.90 },
+    // Aromas que a loja mais vende — ganham selo e filtro próprio.
+    maisVendidos: [
+      'black-ice', 'vanilla-pride', 'true-north', 'rose-thorn',
+      'pure-steel', 'pina-colada', 'no-smoking', 'new-car',
     ],
-
-    // Mínimo de unidades pra fechar o pedido só com cartelas avulsas.
-    minimoKit: 3,
 
     // A raspagem trouxe 57 dos 72 SKUs marcados como indisponíveis na loja de
     // origem. Enquanto o cliente não mandar o estoque real, o catálogo mostra
@@ -40,38 +52,33 @@
     { id: 'classico',   nome: 'Clássico',    cor: 'var(--fam-classico)' },
   ];
 
-  const AVULSOS = new Set(['unitario', 'sem-cartela']);
+  // Só a cartela entra no catálogo. Lata (Fiber Can), spray, Vent Wrap e os
+  // kits fechados de 3 e 6 da loja antiga ficaram de fora a pedido do cliente.
+  const CARTELA = new Set(['unitario', 'sem-cartela', 'display-24', 'xtra']);
 
   // ==========================================================================
   // Estado
   // ==========================================================================
-  const AROMAS = window.LT_AROMAS || [];
+  const TODOS = window.LT_AROMAS || [];
+  const AROMAS = TODOS
+    .filter((a) => a.formatos.some((f) => CARTELA.has(f.formato)))
+    .map((a) => ({ ...a, destaque: CONFIG.maisVendidos.includes(a.slug) }));
   const porSlug = new Map(AROMAS.map((a) => [a.slug, a]));
-
-  // aromas que dá pra escolher unidade a unidade
-  const doKit = AROMAS.filter((a) => a.avulso);
-  // produtos de formato fechado (kit, lata, spray, vent wrap, display box)
-  const especiais = [];
-  for (const a of AROMAS) {
-    for (const f of a.formatos) {
-      if (!AVULSOS.has(f.formato)) especiais.push({ aroma: a, ...f });
-    }
-  }
-  especiais.sort((x, y) => (y.preco || 0) - (x.preco || 0) || x.aroma.nome.localeCompare(y.aroma.nome, 'pt-BR'));
 
   const estado = {
     busca: '',
     familias: new Set(),
+    soMaisVendidos: false,
     soDisponiveis: false,
-    kit: carregar(),   // { chave: quantidade }
+    kit: carregar(),   // { slug: quantidade }
   };
 
   function carregar() {
     try {
       const bruto = JSON.parse(localStorage.getItem('lt-kit') || '{}');
       const limpo = {};
-      for (const [k, v] of Object.entries(bruto)) {
-        if (Number.isInteger(v) && v > 0 && v <= 999) limpo[k] = v;
+      for (const [slug, v] of Object.entries(bruto)) {
+        if (porSlug.has(slug) && Number.isInteger(v) && v > 0 && v <= 999) limpo[slug] = v;
       }
       return limpo;
     } catch { return {}; }
@@ -81,49 +88,36 @@
     try { localStorage.setItem('lt-kit', JSON.stringify(estado.kit)); } catch { /* modo privado */ }
   }
 
-  // chaves: 'a:<slug>' para cartela avulsa, 'e:<id>' para formato especial
-  const chaveAvulso = (slug) => 'a:' + slug;
-  const chaveEspecial = (id) => 'e:' + id;
-
   // ==========================================================================
   // Preço
   // ==========================================================================
   const reais = (n) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const faixaDe = (qtd) => CONFIG.faixas.find((f) => qtd >= f.min && qtd <= f.max) || CONFIG.faixas[0];
-  const precoUnitario = (qtd) => faixaDe(Math.max(qtd, 1)).preco;
+  const faixaDe = (qtd) => FAIXAS.find((f) => qtd >= f.min && qtd <= f.max) || FAIXAS[0];
 
   function totais() {
-    let unidades = 0;
-    const avulsos = [];
-    const fechados = [];
+    const itens = Object.entries(estado.kit)
+      .map(([slug, qtd]) => ({ aroma: porSlug.get(slug), qtd }))
+      .filter((i) => i.aroma)
+      .sort((x, y) => x.aroma.nome.localeCompare(y.aroma.nome, 'pt-BR'));
 
-    for (const [chave, qtd] of Object.entries(estado.kit)) {
-      if (chave.startsWith('a:')) {
-        const aroma = porSlug.get(chave.slice(2));
-        if (!aroma) continue;
-        unidades += qtd;
-        avulsos.push({ aroma, qtd });
-      } else {
-        const item = especiais.find((e) => e.id === chave.slice(2));
-        if (!item) continue;
-        fechados.push({ item, qtd });
-      }
-    }
+    const unidades = itens.reduce((s, i) => s + i.qtd, 0);
+    const faixa = faixaDe(Math.max(unidades, 1));
+    const proxima = FAIXAS.find((f) => f.min > unidades);
+    const cheio = unidades * FAIXAS[0].preco;
+    const total = unidades * faixa.preco;
 
-    const unitario = precoUnitario(unidades);
-    const subtotalAvulso = unidades * unitario;
-    const subtotalFechado = fechados.reduce((s, f) => s + (f.item.preco || 0) * f.qtd, 0);
-    const semPreco = fechados.filter((f) => !f.item.preco).length;
-
-    avulsos.sort((x, y) => x.aroma.nome.localeCompare(y.aroma.nome, 'pt-BR'));
-    return { unidades, unitario, avulsos, fechados, subtotalAvulso, subtotalFechado, semPreco,
-             total: subtotalAvulso + subtotalFechado,
-             itens: avulsos.length + fechados.reduce((s, f) => s + f.qtd, 0) };
+    return {
+      itens, unidades, faixa, proxima,
+      unitario: faixa.preco,
+      total,
+      economia: cheio - total,
+      vazio: !itens.length,
+    };
   }
 
   // ==========================================================================
-  // Helpers de DOM
+  // Helpers
   // ==========================================================================
   const $ = (sel) => document.querySelector(sel);
   const escapa = (s) => String(s).replace(/[&<>"']/g, (c) =>
@@ -132,43 +126,90 @@
   const corFamilia = (id) => (FAMILIAS.find((f) => f.id === id) || {}).cor || 'var(--tinta)';
   const nomeFamilia = (id) => (FAMILIAS.find((f) => f.id === id) || {}).nome || 'Especial';
 
-  // Sem estoque confiável não dá pra marcar nada como esgotado: enquanto
-  // respeitarEstoque for false, tudo aparece como disponível.
+  // Sem estoque confiável não dá pra marcar nada como esgotado.
   const emEstoque = (aroma) =>
-    !CONFIG.respeitarEstoque || aroma.formatos.some((f) => AVULSOS.has(f.formato) && f.disponivel);
+    !CONFIG.respeitarEstoque || aroma.formatos.some((f) => CARTELA.has(f.formato) && f.disponivel);
+
+  function controle(slug, qtd, nome) {
+    if (!qtd) {
+      return `<button class="mais" data-add="${slug}" aria-label="Adicionar ${escapa(nome)}">+</button>`;
+    }
+    return `<div class="passo-qtd">
+      <button data-sub="${slug}" aria-label="Menos um ${escapa(nome)}">&minus;</button>
+      <b>${qtd}</b>
+      <button data-add="${slug}" aria-label="Mais um ${escapa(nome)}">+</button>
+    </div>`;
+  }
 
   // ==========================================================================
-  // Faixas no hero
+  // Escada de kits (hero)
   // ==========================================================================
-  function pintaFaixas() {
+  function pintaKits() {
     const { unidades } = totais();
     const atual = unidades > 0 ? faixaDe(unidades) : null;
-    const linhas = CONFIG.faixas.map((f) => {
-      const rotulo = f.max === Infinity ? `${f.min} unidades ou mais` : `${f.min} a ${f.max} unidades`;
-      const ativa = atual === f ? ' ativa' : '';
-      return `<div class="faixa${ativa}"><span>${rotulo}</span><b>${reais(f.preco)}<small> /un</small></b></div>`;
+
+    $('#hero-kits').innerHTML = `
+      <h3>Quanto maior o kit, mais barata a unidade</h3>
+      ${FAIXAS.map((f) => {
+        const quanto = f.max === Infinity ? `${f.min}+ un` : (f.min === f.max ? `${f.min} un` : `${f.min}–${f.max} un`);
+        return `<div class="faixa${atual === f ? ' ativa' : ''}">
+          <div>
+            <p class="faixa-nome">${escapa(f.nome)} <span>${quanto}</span></p>
+            <p class="faixa-nota">${escapa(f.nota)}</p>
+          </div>
+          <b>${reais(f.preco)}<small>/un</small></b>
+        </div>`;
+      }).join('')}
+      <p class="faixa-rodape">Você mistura os aromas que quiser — o preço segue o total de unidades do pedido.</p>`;
+  }
+
+  // ==========================================================================
+  // Seção dos kits
+  // ==========================================================================
+  function pintaGradeKits() {
+    const { unidades } = totais();
+    const atual = unidades > 0 ? faixaDe(unidades) : null;
+
+    $('#grade-kits').innerHTML = FAIXAS.map((f) => {
+      const fechado = f.max !== Infinity;
+      const quanto = fechado
+        ? (f.min === f.max ? `${f.min} unidade` : `${f.min} a ${f.max} unidades`)
+        : `${f.min} unidades ou mais`;
+      // no kit revenda o "total" seria aberto, então mostra o piso
+      const total = f.preco * f.min;
+
+      return `<article class="kit${atual === f ? ' ativo' : ''}">
+        ${atual === f ? '<span class="kit-selo">seu kit agora</span>' : ''}
+        <p class="kit-nome">${escapa(f.nome)}</p>
+        <p class="kit-quanto">${quanto}</p>
+        <p class="kit-preco">${reais(f.preco)}<small>por unidade</small></p>
+        <p class="kit-total">${f.max === Infinity ? 'a partir de ' : ''}${reais(total)} ${fechado && f.min !== f.max ? `com ${f.min}` : ''}</p>
+        <p class="kit-nota">${escapa(f.nota)}</p>
+      </article>`;
     }).join('');
-    $('#hero-faixas').innerHTML =
-      `<h3>Quanto mais aromas, mais barata a unidade</h3>${linhas}` +
-      `<p class="faixa-nota">Vale para as cartelas avulsas, misturando os aromas que quiser. ` +
-      `Kits fechados, latas e sprays têm preço próprio.</p>`;
   }
 
   // ==========================================================================
   // Filtros
   // ==========================================================================
   function montaChips() {
-    const usadas = FAMILIAS.filter((f) => doKit.some((a) => a.familia === f.id));
-    $('#chips-familia').innerHTML = usadas.map((f) => {
-      const n = doKit.filter((a) => a.familia === f.id).length;
-      return `<button class="chip" data-familia="${f.id}" aria-pressed="false" style="--cor:${f.cor}">
-        <i class="ponto"></i>${escapa(f.nome)} <small>${n}</small></button>`;
-    }).join('');
+    const usadas = FAMILIAS.filter((f) => AROMAS.some((a) => a.familia === f.id));
+    const vendidos = AROMAS.filter((a) => a.destaque).length;
+
+    $('#chips-familia').innerHTML =
+      (vendidos ? `<button class="chip destaque" data-vendidos="1" aria-pressed="false">
+         <i class="estrela">★</i>Mais vendidos <small>${vendidos}</small></button>` : '') +
+      usadas.map((f) => {
+        const n = AROMAS.filter((a) => a.familia === f.id).length;
+        return `<button class="chip" data-familia="${f.id}" aria-pressed="false" style="--cor:${f.cor}">
+          <i class="ponto"></i>${escapa(f.nome)} <small>${n}</small></button>`;
+      }).join('');
   }
 
   function filtrados() {
     const termo = estado.busca.trim().toLowerCase();
-    return doKit.filter((a) => {
+    return AROMAS.filter((a) => {
+      if (estado.soMaisVendidos && !a.destaque) return false;
       if (estado.familias.size && !estado.familias.has(a.familia)) return false;
       if (estado.soDisponiveis && !emEstoque(a)) return false;
       if (!termo) return true;
@@ -181,23 +222,17 @@
   // ==========================================================================
   function pintaGrade() {
     const lista = filtrados();
-    const { unidades } = totais();
-    const unitario = precoUnitario(unidades);
+    const { unidades, unitario } = totais();
+    const preco = unidades ? unitario : FAIXAS[0].preco;
 
     $('#grade').innerHTML = lista.map((a) => {
-      const qtd = estado.kit[chaveAvulso(a.slug)] || 0;
+      const qtd = estado.kit[a.slug] || 0;
       const fora = !emEstoque(a);
-      const controle = qtd > 0
-        ? `<div class="passo-qtd">
-             <button data-menos="${a.slug}" aria-label="Menos um ${escapa(a.nome)}">&minus;</button>
-             <b>${qtd}</b>
-             <button data-mais="${a.slug}" aria-label="Mais um ${escapa(a.nome)}">+</button>
-           </div>`
-        : `<button class="mais" data-mais="${a.slug}" aria-label="Adicionar ${escapa(a.nome)} ao kit">+</button>`;
 
-      return `<article class="cartao" data-escolhido="${qtd > 0 ? 'sim' : 'nao'}" data-estoque="${fora ? 'fora' : 'ok'}">
+      return `<article class="cartao" data-escolhido="${qtd ? 'sim' : 'nao'}" data-estoque="${fora ? 'fora' : 'ok'}">
         <div class="cartao-foto" data-abre="${a.slug}" role="button" tabindex="0" aria-label="Ver ${escapa(a.nome)}">
           <span class="selo familia" style="--cor:${corFamilia(a.familia)}">${escapa(nomeFamilia(a.familia))}</span>
+          ${a.destaque ? '<span class="selo vendido">★ Mais vendido</span>' : ''}
           ${fora ? '<span class="selo fora">sob encomenda</span>' : ''}
           <img src="${escapa(a.foto)}" alt="Little Trees ${escapa(a.nome)}" loading="lazy" />
         </div>
@@ -205,45 +240,17 @@
           <h3 class="cartao-nome">${escapa(a.nome)}</h3>
           <p class="cartao-desc">${escapa(a.descricao || '')}</p>
           <div class="cartao-pe">
-            <span class="cartao-preco"><b>${reais(unitario)}</b> /un</span>
-            ${controle}
+            <span class="cartao-preco"><b>${reais(preco)}</b> /un</span>
+            ${controle(a.slug, qtd, a.nome)}
           </div>
         </div>
       </article>`;
     }).join('');
 
     $('#vazio').hidden = lista.length > 0;
-    $('#resultado').textContent = lista.length === doKit.length
-      ? `${doKit.length} aromas disponíveis para montar o kit`
-      : `${lista.length} de ${doKit.length} aromas`;
-  }
-
-  // ==========================================================================
-  // Formatos especiais
-  // ==========================================================================
-  function pintaEspeciais() {
-    $('#grade-especiais').innerHTML = especiais.map((e) => {
-      const qtd = estado.kit[chaveEspecial(e.id)] || 0;
-      const preco = e.preco
-        ? `${reais(e.preco)}${e.unidades > 1 ? ` <small>${reais(e.preco / e.unidades)} por unidade</small>` : ''}`
-        : '<small>preço sob consulta</small>';
-      const controle = qtd > 0
-        ? `<div class="passo-qtd">
-             <button data-esp-menos="${e.id}" aria-label="Menos um">&minus;</button><b>${qtd}</b>
-             <button data-esp-mais="${e.id}" aria-label="Mais um">+</button>
-           </div>`
-        : `<button class="mais" data-esp-mais="${e.id}" aria-label="Adicionar ${escapa(e.aroma.nome)} ${escapa(e.rotulo)}">+</button>`;
-
-      return `<article class="especial">
-        <img src="${escapa(e.fotos[0] || e.aroma.foto)}" alt="${escapa(e.aroma.nome)} ${escapa(e.rotulo)}" loading="lazy" />
-        <div>
-          <p class="especial-nome">${escapa(e.aroma.nome)}</p>
-          <p class="especial-meta">${escapa(e.rotulo)}${CONFIG.respeitarEstoque && !e.disponivel ? ' · sob encomenda' : ''}</p>
-          <p class="especial-preco">${preco}</p>
-          <div class="cartao-pe">${controle}</div>
-        </div>
-      </article>`;
-    }).join('');
+    $('#resultado').textContent = lista.length === AROMAS.length
+      ? `${AROMAS.length} aromas no catálogo`
+      : `${lista.length} de ${AROMAS.length} aromas`;
   }
 
   // ==========================================================================
@@ -254,150 +261,101 @@
     const corpo = $('#painel-corpo');
     const pe = $('#painel-pe');
 
-    if (!t.avulsos.length && !t.fechados.length) {
-      corpo.innerHTML = `<p class="painel-vazio">Seu kit está vazio.<br />Toque no <b>+</b> dos aromas que você quer.</p>`;
+    if (t.vazio) {
+      corpo.innerHTML = `<p class="painel-vazio">Seu kit está vazio.<br />
+        Toque no <b>+</b> dos aromas que você quer levar.</p>`;
       pe.innerHTML = `<button class="botao primario" disabled>Fechar pedido</button>`;
     } else {
-      const linhasAvulsas = t.avulsos.map(({ aroma, qtd }) => `
+      corpo.innerHTML = t.itens.map(({ aroma, qtd }) => `
         <div class="item-kit">
           <img src="${escapa(aroma.foto)}" alt="" />
           <div>
             <p class="item-kit-nome">${escapa(aroma.nome)}</p>
-            <p class="item-kit-meta">cartela avulsa · ${reais(t.unitario)} cada</p>
-            <button class="remover" data-remove="${chaveAvulso(aroma.slug)}">remover</button>
+            <p class="item-kit-meta">${reais(t.unitario)} cada · ${reais(qtd * t.unitario)}</p>
+            <button class="remover" data-remove="${aroma.slug}">remover</button>
           </div>
-          <div class="passo-qtd">
-            <button data-menos="${aroma.slug}" aria-label="Menos um">&minus;</button><b>${qtd}</b>
-            <button data-mais="${aroma.slug}" aria-label="Mais um">+</button>
-          </div>
+          ${controle(aroma.slug, qtd, aroma.nome)}
         </div>`).join('');
 
-      const linhasFechadas = t.fechados.map(({ item, qtd }) => `
-        <div class="item-kit">
-          <img src="${escapa(item.fotos[0] || item.aroma.foto)}" alt="" />
-          <div>
-            <p class="item-kit-nome">${escapa(item.aroma.nome)}</p>
-            <p class="item-kit-meta">${escapa(item.rotulo)} · ${item.preco ? reais(item.preco) : 'sob consulta'}</p>
-            <button class="remover" data-remove="${chaveEspecial(item.id)}">remover</button>
-          </div>
-          <div class="passo-qtd">
-            <button data-esp-menos="${item.id}" aria-label="Menos um">&minus;</button><b>${qtd}</b>
-            <button data-esp-mais="${item.id}" aria-label="Mais um">+</button>
-          </div>
-        </div>`).join('');
-
-      corpo.innerHTML = linhasAvulsas + linhasFechadas;
-
-      const proxima = CONFIG.faixas.find((f) => f.min > t.unidades);
-      const faltam = proxima ? proxima.min - t.unidades : 0;
-      const aviso = proxima && t.unidades > 0
-        ? `<p class="aviso-faixa">Coloque mais ${faltam} ${faltam === 1 ? 'cartela' : 'cartelas'} e cada uma sai por ${reais(proxima.preco)}.</p>`
-        : '';
-
-      const faltaMinimo = t.unidades > 0 && t.unidades < CONFIG.minimoKit && !t.fechados.length;
-      const alerta = faltaMinimo
-        ? `<p class="aviso-faixa">O kit avulso fecha a partir de ${CONFIG.minimoKit} cartelas.</p>`
-        : '';
+      const faltam = t.proxima ? t.proxima.min - t.unidades : 0;
+      const aviso = t.proxima
+        ? `<p class="aviso-faixa">Faltam ${faltam} ${faltam === 1 ? 'unidade' : 'unidades'} pro <b>${escapa(t.proxima.nome)}</b>: cada uma sai por ${reais(t.proxima.preco)}.</p>`
+        : `<p class="aviso-faixa">Você está no <b>${escapa(t.faixa.nome)}</b>, o melhor preço da tabela.</p>`;
 
       pe.innerHTML = `
-        ${t.unidades ? `<div class="linha-total"><span>${t.unidades} ${t.unidades === 1 ? 'cartela' : 'cartelas'} × ${reais(t.unitario)}</span><span>${reais(t.subtotalAvulso)}</span></div>` : ''}
-        ${t.fechados.length ? `<div class="linha-total"><span>Kits e outros formatos</span><span>${t.subtotalFechado ? reais(t.subtotalFechado) : 'sob consulta'}</span></div>` : ''}
-        ${aviso}${alerta}
+        <div class="linha-total"><span>${t.unidades} ${t.unidades === 1 ? 'unidade' : 'unidades'} × ${reais(t.unitario)}</span><span>${reais(t.total)}</span></div>
+        <div class="linha-total"><span>Faixa aplicada</span><span>${escapa(t.faixa.nome)}</span></div>
+        ${t.economia > 0 ? `<div class="linha-total economia"><span>Você economiza</span><span>${reais(t.economia)}</span></div>` : ''}
+        ${aviso}
         <div class="linha-total grande"><span>Total</span><b>${reais(t.total)}</b></div>
-        ${t.semPreco ? `<p class="nota-pe">${t.semPreco} ${t.semPreco === 1 ? 'item está' : 'itens estão'} sem preço no catálogo — a loja confirma no WhatsApp.</p>` : ''}
-        <button class="botao primario" id="fechar-pedido" ${faltaMinimo ? 'disabled' : ''}>Fechar pedido no WhatsApp</button>
-        <p class="nota-pe">Você revisa tudo na conversa antes de confirmar. Nada é cobrado agora.</p>`;
+        <button class="botao primario" id="fechar-pedido">Fechar pedido no WhatsApp</button>
+        <p class="nota-pe">O resumo vai pronto na conversa. Você confere tudo antes de confirmar.</p>`;
     }
 
-    // topo e barra
-    const contador = $('#contador-kit');
-    contador.textContent = t.unidades + t.fechados.reduce((s, f) => s + f.qtd, 0);
-    $('#abrir-kit').dataset.vazio = t.itens ? 'nao' : 'sim';
+    $('#contador-kit').textContent = t.unidades;
+    $('#abrir-kit').dataset.vazio = t.vazio ? 'sim' : 'nao';
 
     const barra = $('#barra-kit');
-    barra.hidden = !t.itens;
-    barra.dataset.visivel = t.itens ? 'sim' : 'nao';
-    document.body.dataset.kit = t.itens ? 'cheio' : 'vazio';
-    $('#barra-qtd').textContent = `${t.unidades + t.fechados.reduce((s, f) => s + f.qtd, 0)} ${t.itens === 1 ? 'item' : 'itens'}`;
+    barra.hidden = t.vazio;
+    barra.dataset.visivel = t.vazio ? 'nao' : 'sim';
+    document.body.dataset.kit = t.vazio ? 'vazio' : 'cheio';
+    $('#barra-qtd').textContent = `${t.unidades} ${t.unidades === 1 ? 'unidade' : 'unidades'} · ${t.faixa.nome}`;
     $('#barra-total').textContent = reais(t.total);
   }
 
   // ==========================================================================
-  // Mensagem do WhatsApp
+  // Resumo do pedido pro WhatsApp
   // ==========================================================================
-  function mensagem() {
+  function resumo() {
     const t = totais();
-    const linhas = ['Olá! Montei meu kit no site da Little Trees:', ''];
+    const L = ['*PEDIDO — Little Trees*', ''];
 
-    if (t.avulsos.length) {
-      linhas.push(`*Cartelas avulsas* (${t.unidades} un · ${reais(t.unitario)} cada)`);
-      for (const { aroma, qtd } of t.avulsos) linhas.push(`• ${qtd}x ${aroma.nome}`);
-      linhas.push(`Subtotal: ${reais(t.subtotalAvulso)}`, '');
+    L.push(`*Aromas escolhidos* (${t.itens.length})`);
+    for (const { aroma, qtd } of t.itens) {
+      L.push(`• ${qtd}x ${aroma.nome} — ${reais(qtd * t.unitario)}`);
     }
 
-    if (t.fechados.length) {
-      linhas.push('*Outros formatos*');
-      for (const { item, qtd } of t.fechados) {
-        linhas.push(`• ${qtd}x ${item.aroma.nome} — ${item.rotulo}` + (item.preco ? ` (${reais(item.preco)})` : ' (a confirmar)'));
-      }
-      linhas.push('');
-    }
-
-    linhas.push(`*Total: ${reais(t.total)}*`);
-    if (t.semPreco) linhas.push('(alguns itens ainda precisam de confirmação de preço)');
-    return linhas.join('\n');
+    L.push('', '------------------------------');
+    L.push(`Unidades: ${t.unidades}`);
+    L.push(`Faixa: ${t.faixa.nome} (${reais(t.unitario)} cada)`);
+    if (t.economia > 0) L.push(`Economia: ${reais(t.economia)}`);
+    L.push(`*TOTAL: ${reais(t.total)}*`);
+    return L.join('\n');
   }
 
   function fecharPedido() {
-    const texto = mensagem();
+    const texto = resumo();
     if (CONFIG.whatsapp) {
       window.open(`https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
       return;
     }
-    // sem número configurado ainda: copia o pedido pra não travar o teste
     navigator.clipboard?.writeText(texto).then(
-      () => alert('Número do WhatsApp ainda não configurado.\nO pedido foi copiado:\n\n' + texto),
+      () => alert('Número do WhatsApp ainda não configurado.\nO resumo foi copiado:\n\n' + texto),
       () => alert('Número do WhatsApp ainda não configurado.\n\n' + texto),
     );
   }
 
   // ==========================================================================
-  // Modal do aroma
+  // Detalhe do aroma
   // ==========================================================================
+  let aromaAberto = null;
+
   function abreModal(slug) {
     const a = porSlug.get(slug);
     if (!a) return;
+    aromaAberto = slug;
 
-    // a foto grande é a da cartela (a mesma do card), não a da embalagem do kit
-    const fotos = [...new Set([a.foto, ...a.formatos.flatMap((f) => f.fotos)])].filter(Boolean).slice(0, 4);
-    const qtd = estado.kit[chaveAvulso(a.slug)] || 0;
-    const { unidades } = totais();
-
-    const linhasFormato = a.formatos.map((f) => {
-      const avulso = AVULSOS.has(f.formato);
-      const preco = avulso
-        ? `${reais(precoUnitario(unidades || 1))}<small>por unidade, no kit</small>`
-        : (f.preco ? `${reais(f.preco)}${f.unidades > 1 ? `<small>${reais(f.preco / f.unidades)} por unidade</small>` : ''}` : '<small>sob consulta</small>');
-      const acao = avulso
-        ? (qtd > 0
-          ? `<div class="passo-qtd"><button data-menos="${a.slug}">&minus;</button><b>${qtd}</b><button data-mais="${a.slug}">+</button></div>`
-          : `<button class="botao primario" style="height:38px;padding:0 16px;font-size:14px" data-mais="${a.slug}">Adicionar</button>`)
-        : `<button class="mais" data-esp-mais="${f.id}" aria-label="Adicionar ${escapa(f.rotulo)}">+</button>`;
-
-      return `<div class="formato">
-        <div>
-          <p class="formato-nome">${escapa(f.rotulo)}</p>
-          <p class="formato-meta">${f.unidades > 1 ? f.unidades + ' unidades' : 'uma unidade'}${CONFIG.respeitarEstoque ? (f.disponivel ? ' · em estoque' : ' · sob encomenda') : ''}</p>
-        </div>
-        <p class="formato-preco">${preco}</p>
-        ${acao}
-      </div>`;
-    }).join('');
+    // a foto grande é a mesma do card; as miniaturas mostram embalagem e verso
+    const fotos = [...new Set([a.foto, ...a.formatos.filter((f) => CARTELA.has(f.formato)).flatMap((f) => f.fotos)])]
+      .filter(Boolean).slice(0, 4);
+    const qtd = estado.kit[a.slug] || 0;
+    const t = totais();
 
     $('#modal-caixa').innerHTML = `
       <div class="modal-topo">
         <div>
-          <span class="selo familia" style="--cor:${corFamilia(a.familia)};position:static;display:inline-block;margin-bottom:8px">${escapa(nomeFamilia(a.familia))}</span>
+          <span class="selo familia estatico" style="--cor:${corFamilia(a.familia)}">${escapa(nomeFamilia(a.familia))}</span>
+          ${a.destaque ? '<span class="selo vendido estatico">★ Mais vendido</span>' : ''}
           <h2 id="modal-titulo">${escapa(a.nome)}</h2>
           ${a.descricao ? `<p class="modal-desc">${escapa(a.descricao)}</p>` : ''}
         </div>
@@ -409,8 +367,19 @@
           ${fotos.length > 1 ? `<div class="modal-mini">${fotos.slice(1).map((f) => `<img src="${escapa(f)}" alt="" />`).join('')}</div>` : ''}
         </div>
         <div>
-          <h3 style="font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--tinta-fraca);margin-bottom:4px">Como levar</h3>
-          ${linhasFormato}
+          <h3 class="modal-rotulo">Quanto custa</h3>
+          <p class="modal-preco-grande">${reais(t.unidades ? t.unitario : FAIXAS[0].preco)}<small> por unidade${t.unidades ? ` no seu kit atual (${escapa(t.faixa.nome)})` : ''}</small></p>
+          <div class="modal-acao">
+            ${controle(a.slug, qtd, a.nome)}
+            <span class="modal-acao-nota">${qtd ? `${qtd} no kit` : 'adicionar ao kit'}</span>
+          </div>
+          <div class="mini-escada">
+            ${FAIXAS.map((f) => {
+              const quanto = f.max === Infinity ? `${f.min}+` : `${f.min}–${f.max}`;
+              return `<div class="mini-faixa${t.unidades && faixaDe(t.unidades) === f ? ' ativa' : ''}">
+                <span>${escapa(f.nome)} <small>${quanto} un</small></span><b>${reais(f.preco)}</b></div>`;
+            }).join('')}
+          </div>
         </div>
       </div>`;
 
@@ -420,6 +389,7 @@
 
   function fechaModal() {
     $('#modal').hidden = true;
+    aromaAberto = null;
     if ($('#painel').hidden) document.body.style.overflow = '';
   }
 
@@ -442,47 +412,48 @@
   // ==========================================================================
   // Mutação do kit
   // ==========================================================================
-  function muda(chave, delta) {
-    const atual = estado.kit[chave] || 0;
+  function muda(slug, delta) {
+    const atual = estado.kit[slug] || 0;
     const novo = Math.max(0, Math.min(999, atual + delta));
-    if (novo) estado.kit[chave] = novo; else delete estado.kit[chave];
+    if (novo) estado.kit[slug] = novo; else delete estado.kit[slug];
     salvar();
     repinta();
   }
 
-  function remove(chave) {
-    delete estado.kit[chave];
+  function remove(slug) {
+    delete estado.kit[slug];
     salvar();
     repinta();
   }
 
   function repinta() {
     pintaGrade();
-    pintaEspeciais();
     pintaKit();
-    pintaFaixas();
-    if (!$('#modal').hidden) {
-      const titulo = $('#modal-titulo');
-      const aroma = titulo && AROMAS.find((a) => a.nome === titulo.textContent);
-      if (aroma) abreModal(aroma.slug);
-    }
+    pintaKits();
+    pintaGradeKits();
+    if (aromaAberto) abreModal(aromaAberto);
   }
 
   // ==========================================================================
   // Eventos
   // ==========================================================================
   document.addEventListener('click', (ev) => {
-    const alvo = ev.target.closest('[data-mais],[data-menos],[data-esp-mais],[data-esp-menos],[data-remove],[data-abre],[data-familia],[data-fecha-modal]');
+    const alvo = ev.target.closest('[data-add],[data-sub],[data-remove],[data-abre],[data-familia],[data-vendidos],[data-fecha-modal]');
     if (!alvo) return;
     const d = alvo.dataset;
 
-    if (d.mais) return muda(chaveAvulso(d.mais), +1);
-    if (d.menos) return muda(chaveAvulso(d.menos), -1);
-    if (d.espMais) return muda(chaveEspecial(d.espMais), +1);
-    if (d.espMenos) return muda(chaveEspecial(d.espMenos), -1);
+    if (d.add) return muda(d.add, +1);
+    if (d.sub) return muda(d.sub, -1);
     if (d.remove) return remove(d.remove);
     if (d.abre) return abreModal(d.abre);
     if (d.fechaModal !== undefined) return fechaModal();
+
+    if (d.vendidos) {
+      const ligado = alvo.getAttribute('aria-pressed') === 'true';
+      alvo.setAttribute('aria-pressed', String(!ligado));
+      estado.soMaisVendidos = !ligado;
+      return pintaGrade();
+    }
 
     if (d.familia) {
       const ligado = alvo.getAttribute('aria-pressed') === 'true';
@@ -524,18 +495,17 @@
   // A barra de filtros gruda logo abaixo do topo, e a altura do topo muda
   // conforme a busca quebra de linha. Medir evita chute no breakpoint.
   function ajustaTopo() {
-    const alto = document.querySelector('.topo').offsetHeight;
-    document.documentElement.style.setProperty('--topo-altura', alto + 'px');
+    document.documentElement.style.setProperty('--topo-altura', $('.topo').offsetHeight + 'px');
   }
 
   // ==========================================================================
   // Início
   // ==========================================================================
   if (!CONFIG.respeitarEstoque) {
-    // sem estoque confiável, o filtro de disponibilidade só confunde
     $('#so-disponiveis').closest('.alternador').hidden = true;
   }
-  $('#hero-total').textContent = doKit.length;
+  $('#hero-total').textContent = AROMAS.length;
+  $('#hero-preco').textContent = reais(FAIXAS[0].preco);
   montaChips();
   repinta();
   ajustaTopo();
