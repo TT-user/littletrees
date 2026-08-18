@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Little Trees — monte seu kit de aromas</title>
+<meta name="description" content="Escolha entre 43 aromas Little Trees, monte seu kit na quantidade que quiser e feche o pedido pelo WhatsApp." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+
+<header class="topo" id="topo">
+  <div class="wrap topo-linha">
+    <a class="marca" href="#topo" aria-label="Início">
+      <svg class="marca-arvore" viewBox="0 0 24 32" aria-hidden="true">
+        <path d="M12 1 6.5 10h3.2L4 20h4.4L2 30h20l-6.4-10H20l-5.7-10h3.2z" />
+        <rect x="10.4" y="27" width="3.2" height="5" rx="0.6" />
+      </svg>
+      <span class="marca-texto">
+        <strong>Little Trees</strong>
+        <small>aromatizantes</small>
+      </span>
+    </a>
+
+    <div class="topo-busca">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input type="search" id="busca" placeholder="Buscar aroma (ex.: Black Ice, baunilha…)" aria-label="Buscar aroma" autocomplete="off" />
+    </div>
+
+    <button class="botao-kit" id="abrir-kit" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18l-1.5 13H4.5z"/><path d="M8.5 7a3.5 3.5 0 0 1 7 0"/></svg>
+      <span>Meu kit</span>
+      <b class="contador" id="contador-kit">0</b>
+    </button>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="wrap hero-grade">
+      <div class="hero-texto">
+        <p class="olho">Catálogo de aromas</p>
+        <h1>Monte seu kit escolhendo <em>aroma por aroma</em>.</h1>
+        <p class="hero-sub">
+          São <strong id="hero-total">43</strong> aromas Little Trees no catálogo. Selecione os que você quer,
+          ajuste a quantidade de cada um e feche o pedido pelo WhatsApp — sem cadastro, sem carrinho complicado.
+        </p>
+        <div class="hero-acoes">
+          <a class="botao primario" href="#catalogo">Escolher aromas</a>
+          <a class="botao fantasma" href="#especiais">Ver kits e formatos</a>
+        </div>
+        <ol class="passos">
+          <li><b>1</b> Toque nos aromas que quiser</li>
+          <li><b>2</b> Ajuste a quantidade de cada um</li>
+          <li><b>3</b> Feche o pedido no WhatsApp</li>
+        </ol>
+      </div>
+      <div class="hero-faixas" id="hero-faixas" aria-label="Preço por quantidade"></div>
+    </div>
+  </section>
+
+  <section class="filtros" id="catalogo">
+    <div class="wrap">
+      <div class="filtros-linha">
+        <div class="chips" id="chips-familia" role="group" aria-label="Filtrar por família olfativa"></div>
+        <label class="alternador">
+          <input type="checkbox" id="so-disponiveis" />
+          <span>Só o que está em estoque</span>
+        </label>
+      </div>
+      <p class="resultado" id="resultado"></p>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="grade" id="grade"></div>
+    <p class="vazio" id="vazio" hidden>Nenhum aroma encontrado com esse filtro.</p>
+  </section>
+
+  <section class="especiais" id="especiais">
+    <div class="wrap">
+      <p class="olho">Além da cartela</p>
+      <h2>Kits fechados, Vent Wrap, lata e spray</h2>
+      <p class="secao-sub">
+        Formatos que não entram no kit avulso — cada um é um produto próprio, com a quantidade já definida.
+      </p>
+      <div class="grade-especiais" id="grade-especiais"></div>
+    </div>
+  </section>
+
+  <footer class="rodape">
+    <div class="wrap rodape-linha">
+      <div>
+        <p class="rodape-marca">Little Trees</p>
+        <p class="rodape-nota">Catálogo de aromas · pedidos pelo WhatsApp</p>
+      </div>
+      <a class="botao fantasma" href="#topo">Voltar ao topo</a>
+    </div>
+  </footer>
+
+</main>
+
+<!-- painel do kit -->
+<div class="cortina" id="cortina" hidden></div>
+
+<aside class="painel" id="painel" role="dialog" aria-modal="true" aria-labelledby="painel-titulo" hidden>
+  <div class="painel-topo">
+    <h2 id="painel-titulo">Meu kit</h2>
+    <button class="fechar" id="fechar-kit" aria-label="Fechar">&times;</button>
+  </div>
+  <div class="painel-corpo" id="painel-corpo"></div>
+  <div class="painel-pe" id="painel-pe"></div>
+</aside>
+
+<!-- barra fixa no mobile -->
+<div class="barra-kit" id="barra-kit" hidden>
+  <div class="barra-info">
+    <b id="barra-qtd">0 unidades</b>
+    <span id="barra-total">R$ 0,00</span>
+  </div>
+  <button class="botao primario" id="barra-abrir">Ver meu kit</button>
+</div>
+
+<!-- detalhe do aroma -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo" hidden>
+  <div class="modal-caixa" id="modal-caixa"></div>
+</div>
+
+<script src="assets/js/dados.js"></script>
+<script src="assets/js/loja.js"></script>
+</body>
+</html>

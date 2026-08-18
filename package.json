@@ -1,0 +1,19 @@
+{
+  "name": "littletrees",
+  "private": true,
+  "type": "module",
+  "description": "Catalogo de aromas Little Trees",
+  "scripts": {
+    "raspa": "node _fonte/extrai.mjs",
+    "baixa": "node _fonte/baixa.mjs",
+    "normaliza": "node _fonte/normaliza.mjs",
+    "imagens": "node _fonte/normaliza-imagens.mjs",
+    "teste": "node _fonte/teste.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}
