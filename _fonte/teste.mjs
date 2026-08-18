@@ -58,6 +58,42 @@ const vitrine = await pagina.evaluate(() => {
 });
 console.log("vitrine:", JSON.stringify(vitrine));
 
+
+// ---------- travessao, selecao e copia ----------
+const trava = await pagina.evaluate(() => {
+  const visivel = document.body.innerText;
+  const copia = new Event('copy', { bubbles: true, cancelable: true });
+  document.querySelector('h1').dispatchEvent(copia);
+  const busca = document.querySelector('#busca');
+  return {
+    travessoesNaTela: (visivel.match(/[–—]/g) || []).length,
+    selecaoNoBody: getComputedStyle(document.body).userSelect,
+    selecaoNaBusca: getComputedStyle(busca).userSelect,
+    copiaBloqueada: copia.defaultPrevented,
+  };
+});
+console.log('trava:', JSON.stringify(trava));
+
+// ---------- a pista cobre a tela inteira? ----------
+const pista = await pagina.evaluate(() => {
+  const p = document.querySelector('.pista');
+  return {
+    desenhos: p.children.length,
+    metadeDaPista: Math.round(p.scrollWidth / 2),
+    larguraDaTela: window.innerWidth,
+    cobreATela: p.scrollWidth / 2 >= window.innerWidth,
+    animacao: getComputedStyle(p).animationName,
+    repeticao: getComputedStyle(p).animationIterationCount,
+  };
+});
+console.log('pista:', JSON.stringify(pista));
+
+// ---------- favicon ----------
+for (const arq of ['assets/favicon.svg', 'assets/favicon-32.png', 'assets/favicon-180.png']) {
+  const r = await pagina.request.get('http://localhost:4321/' + arq);
+  console.log('favicon', arq, r.status());
+}
+
 // ---------- a escada de preço ----------
 const preco = () => pagina.locator('.cartao-preco b').first().textContent();
 const alvo = pagina.locator('.cartao [data-add]').first();
@@ -139,6 +175,41 @@ const medidas = await mob.evaluate(() => ({
 }));
 console.log('mobile:', JSON.stringify(medidas));
 await mob.screenshot({ path: 'tela-5-mobile.png' });
+
+// ---------- varredura do mobile ----------
+await mob.locator('#kits').scrollIntoViewIfNeeded();
+await mob.waitForTimeout(200);
+await mob.screenshot({ path: 'tela-8-mobile-kits.png' });
+
+const secaoKits = await mob.evaluate(() => ({
+  colunas: getComputedStyle(document.querySelector('.grade-kits')).gridTemplateColumns.split(' ').length,
+  alturaSecao: document.querySelector('#kits').offsetHeight,
+}));
+console.log('secao kits mobile:', JSON.stringify(secaoKits));
+
+await mob.evaluate(() => window.scrollTo(0, 900));
+await mob.locator('.cartao-foto').first().click();
+await mob.waitForSelector('.mini-escada');
+await mob.waitForTimeout(300);
+await mob.screenshot({ path: 'tela-9-mobile-modal.png' });
+const modal = await mob.evaluate(() => {
+  const c = document.querySelector('.modal-caixa');
+  return { caixaCabe: c.scrollHeight <= c.clientHeight, alturaCaixa: c.clientHeight, conteudo: c.scrollHeight };
+});
+console.log('modal mobile:', JSON.stringify(modal));
+await mob.keyboard.press('Escape');
+
+await mob.locator('#barra-abrir').click();
+await mob.waitForSelector('#painel:not([hidden])');
+await mob.waitForTimeout(400);
+await mob.screenshot({ path: 'tela-10-mobile-painel.png' });
+const painel = await mob.evaluate(() => ({
+  larguraPainel: document.querySelector('.painel').offsetWidth,
+  larguraTela: window.innerWidth,
+  botaoAlcancavel: document.querySelector('#fechar-pedido').getBoundingClientRect().bottom <= window.innerHeight,
+}));
+console.log('painel mobile:', JSON.stringify(painel));
+await mob.keyboard.press('Escape');
 
 console.log('\nERROS:', erros.length, '| precos errados:', falhas);
 erros.forEach((e) => console.log('  ', e));

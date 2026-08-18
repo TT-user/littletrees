@@ -1,4 +1,4 @@
-/* Little Trees — catálogo de aromas.
+/* Little Trees: catálogo de aromas.
    Paleta tirada da própria cartela: fundo amarelo, logo vermelho, texto preto. */
 
 :root {
@@ -40,7 +40,23 @@ body {
   color: var(--tinta);
   font: 400 16px/1.6 Inter, system-ui, -apple-system, Segoe UI, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* catálogo sem seleção de texto, a pedido do cliente */
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+
+/* a busca precisa continuar selecionável, senão não dá pra corrigir o que digitou */
+input, textarea {
+  -webkit-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* sem arrastar as fotos pra fora */
+img { -webkit-user-drag: none; user-select: none; }
 
 h1, h2, h3 { font-family: Archivo, Inter, sans-serif; font-weight: 800; letter-spacing: -.02em; margin: 0; line-height: 1.1; }
 p { margin: 0; }
@@ -504,6 +520,27 @@ button { font: inherit; color: inherit; }
   .passo-qtd button, .mais { width: 28px; height: 28px; font-size: 16px; }
   .passo-qtd b { min-width: 20px; font-size: 14px; }
   .selo.vendido { font-size: 10px; padding: 3px 7px; }
+  /* em coluna única os cinco kits viravam 1400px de rolagem */
+  .grade-kits { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 24px; }
+  .kit { padding: 15px 12px; }
+  .kit-selo { left: 12px; font-size: 9.5px; padding: 3px 7px; }
+  .kit-nome { font-size: 15px; }
+  .kit-quanto, .kit-nota { font-size: 11.5px; }
+  .kit-preco { font-size: 23px; margin-top: 10px; }
+  .kit-preco small { font-size: 11px; }
+  .kit-total { font-size: 12px; margin-top: 8px; }
+  .kits { padding: 44px 0 48px; }
+
+  /* a foto grande do modal empurrava o preço e o botão pra fora da tela */
+  .modal-topo { padding: 18px 18px 0; }
+  .modal-topo h2 { font-size: 21px; }
+  .modal-grade { gap: 16px; padding: 14px 18px 20px; }
+  .modal-fotos img { aspect-ratio: auto; height: 170px; }
+  .modal-mini { grid-template-columns: repeat(4, 1fr); }
+  .modal-mini img { height: 54px; }
+  .modal-preco-grande { font-size: 27px; }
+  .modal-acao { margin: 12px 0 16px; }
+
   /* a faixa dos campeões empilha e os três rolam na horizontal */
   .vitrine-frente { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 0 16px; }
   .vitrine-titulo br { display: none; }
@@ -515,4 +552,7 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
   html { scroll-behavior: auto; }
+  /* a pista do hero é exceção: o cliente quer ela rodando sempre. Fica mais
+     lenta pra quem pediu menos movimento, mas não para. */
+  .pista { animation: passa 70s linear infinite !important; }
 }

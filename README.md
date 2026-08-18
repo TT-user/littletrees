@@ -7,12 +7,27 @@ HTML/CSS/JS puro, sem build: é só abrir o `index.html` ou publicar a pasta.
 ```
 index.html              a página inteira
 assets/css/style.css    paleta tirada da cartela: amarelo, vermelho da marca, preto
-assets/js/dados.js      GERADO — os aromas com fotos, descrição e família
+assets/js/dados.js      GERADO: os aromas com fotos, descrição e família
 assets/js/loja.js       tabela de preços, filtros, montador de kit e WhatsApp
+assets/favicon.svg      arvorezinha no amarelo (favicon-32 e -180 saem dele)
 img/catalogo/           fotos normalizadas em 800x800 (as que o site usa)
 img/produtos/           as mesmas fotos como vieram da loja de origem
 _fonte/                 a raspagem e os scripts que geram tudo acima
 ```
+
+## Detalhes de comportamento
+
+- **Sem seleção e sem cópia de texto**, a pedido. É `user-select: none` no body
+  mais bloqueio dos eventos `copy`, `cut`, `selectstart` e `dragstart` no
+  `loja.js`. A busca continua selecionável, senão não dá pra corrigir o que se
+  digitou. Vale o aviso: isso é freio de mão, não cofre. Quem abrir o
+  código-fonte da página continua enxergando o texto e as fotos.
+- **A faixa dos campeões roda sempre.** A pista se remonta no `resize` repetindo
+  os desenhos até a metade dela cobrir a tela, então nunca aparece um vão andando
+  junto num monitor largo. Ela é a única animação que sobrevive ao
+  `prefers-reduced-motion` (fica mais lenta, mas não para), porque o cliente
+  pediu o efeito sempre ligado.
+- **Sem travessões** no texto do site, por preferência de escrita.
 
 ## Tabela de preços
 
@@ -66,6 +81,7 @@ npm run raspa       # _fonte/p1.html + p2.html  ->  _fonte/produtos.json
 npm run baixa       # baixa as 142 fotos        ->  img/produtos/
 npm run imagens     # 800x800 fundo branco      ->  img/catalogo/
 npm run normaliza   # agrupa por aroma          ->  assets/js/dados.js
+npm run favicon     # favicon.svg               ->  favicon-32.png e -180.png
 npm run teste       # smoke test no navegador (confere a escada de preços)
 ```
 

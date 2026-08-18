@@ -1,4 +1,4 @@
-/* Little Trees — catálogo e montador de kit.
+/* Little Trees: catálogo e montador de kit.
    Depende de assets/js/dados.js (window.LT_AROMAS). */
 
 (() => {
@@ -8,7 +8,7 @@
   // TABELA DE PREÇOS (passada pelo cliente em 18/08/2026)
   // --------------------------------------------------------------------------
   // A unidade avulsa é R$ 20,00 na loja; aqui vai a R$ 19,90 por ser mais
-  // chamativo. Daí pra baixo os kits são por quantidade TOTAL do pedido — o
+  // chamativo. Daí pra baixo os kits são por quantidade TOTAL do pedido: o
   // cliente pode misturar os aromas que quiser dentro do kit.
   //
   //   1 a 2 un ....... R$ 19,90 cada
@@ -17,7 +17,7 @@
   //   24 a 49 un ..... R$ 11,90 cada   (sugestão nossa, continuando a escada)
   //   50 un ou mais .. R$  9,90 cada   (sugestão nossa, faixa de revenda)
   //
-  // Só as duas últimas faixas são sugestão — confirmar com o cliente.
+  // Só as duas últimas faixas são sugestão, confirmar com o cliente.
   // ==========================================================================
   const FAIXAS = [
     { min: 1,  max: 2,        preco: 19.90, nome: 'Unidade avulsa', nota: 'pra levar um aroma só' },
@@ -31,7 +31,7 @@
     // Número que recebe os pedidos, formato 55DDDNUMERO.
     whatsapp: '5532998151131',
 
-    // Aromas que a loja mais vende — ganham selo e filtro próprio.
+    // Aromas que a loja mais vende, com selo e filtro próprio.
     maisVendidos: [
       'black-ice', 'vanilla-pride', 'true-north', 'rose-thorn',
       'pure-steel', 'pina-colada', 'no-smoking', 'new-car',
@@ -154,7 +154,7 @@
     $('#hero-kits').innerHTML = `
       <h3>Quanto maior o kit, mais barata a unidade</h3>
       ${FAIXAS.map((f) => {
-        const quanto = f.max === Infinity ? `${f.min}+ un` : (f.min === f.max ? `${f.min} un` : `${f.min}–${f.max} un`);
+        const quanto = f.max === Infinity ? `${f.min}+ un` : (f.min === f.max ? `${f.min} un` : `${f.min} a ${f.max} un`);
         return `<div class="faixa${atual === f ? ' ativa' : ''}">
           <div>
             <p class="faixa-nome">${escapa(f.nome)} <span>${quanto}</span></p>
@@ -163,7 +163,7 @@
           <b>${reais(f.preco)}<small>/un</small></b>
         </div>`;
       }).join('')}
-      <p class="faixa-rodape">Você mistura os aromas que quiser — o preço segue o total de unidades do pedido.</p>`;
+      <p class="faixa-rodape">Você mistura os aromas que quiser. O preço segue o total de unidades do pedido.</p>`;
   }
 
   // ==========================================================================
@@ -172,15 +172,24 @@
   // Os aromas ficam parados; quem anda é a pista do fundo. A pista tem o mesmo
   // trecho duplicado e desliza até -50%, então o loop não dá salto.
   // ==========================================================================
+  const DESENHOS = ['carro-hatch', 'arvore', 'carro-suv', 'arvore', 'carro-pickup', 'arvore'];
+
   function montaPista() {
-    const desenhos = ['carro-hatch', 'arvore', 'carro-suv', 'arvore', 'carro-pickup', 'arvore'];
-    const trecho = Array.from({ length: 12 }, (_, i) => {
-      const id = desenhos[i % desenhos.length];
+    const pista = $('#pista');
+    const sequencia = DESENHOS.map((id) => {
       const arvore = id === 'arvore';
       return `<svg class="passante ${arvore ? 'passante-arvore' : 'passante-carro'}" viewBox="${arvore ? '0 0 24 32' : '0 0 134 46'}">
         <use href="#${id}" /></svg>`;
     }).join('');
-    $('#pista').innerHTML = trecho + trecho;
+
+    // Mede uma sequência e repete o quanto for preciso pra metade da pista
+    // cobrir a tela inteira. Sem isso, num monitor largo a pista acabaria antes
+    // da borda e apareceria um vão andando junto.
+    pista.innerHTML = sequencia;
+    const largura = pista.scrollWidth || 600;
+    const vezes = Math.max(2, Math.ceil(window.innerWidth / largura) + 1);
+    const metade = sequencia.repeat(vezes);
+    pista.innerHTML = metade + metade;
   }
 
   function pintaVitrine() {
@@ -346,11 +355,11 @@
   // ==========================================================================
   function resumo() {
     const t = totais();
-    const L = ['*PEDIDO — Little Trees*', ''];
+    const L = ['*PEDIDO LITTLE TREES*', ''];
 
     L.push(`*Aromas escolhidos* (${t.itens.length})`);
     for (const { aroma, qtd } of t.itens) {
-      L.push(`• ${qtd}x ${aroma.nome} — ${reais(qtd * t.unitario)}`);
+      L.push(`• ${qtd}x ${aroma.nome} · ${reais(qtd * t.unitario)}`);
     }
 
     L.push('', '------------------------------');
@@ -413,7 +422,7 @@
           </div>
           <div class="mini-escada">
             ${FAIXAS.map((f) => {
-              const quanto = f.max === Infinity ? `${f.min}+` : `${f.min}–${f.max}`;
+              const quanto = f.max === Infinity ? `${f.min}+` : `${f.min} a ${f.max}`;
               return `<div class="mini-faixa${t.unidades && faixaDe(t.unidades) === f ? ' ativa' : ''}">
                 <span>${escapa(f.nome)} <small>${quanto} un</small></span><b>${reais(f.preco)}</b></div>`;
             }).join('')}
@@ -531,10 +540,28 @@
     pintaGrade();
   });
 
+  // O catálogo vai sem seleção e sem cópia de texto, a pedido do cliente.
+  // Vale dizer que isso é freio de mão, não cofre: quem abrir o código-fonte
+  // da página continua enxergando tudo.
+  for (const evento of ['copy', 'cut', 'selectstart', 'dragstart']) {
+    document.addEventListener(evento, (ev) => {
+      if (ev.target.closest && ev.target.closest('input, textarea')) return;
+      ev.preventDefault();
+    });
+  }
+
   // A barra de filtros gruda logo abaixo do topo, e a altura do topo muda
   // conforme a busca quebra de linha. Medir evita chute no breakpoint.
   function ajustaTopo() {
     document.documentElement.style.setProperty('--topo-altura', $('.topo').offsetHeight + 'px');
+  }
+
+  let redimensiona;
+  function aoRedimensionar() {
+    ajustaTopo();
+    clearTimeout(redimensiona);
+    // remontar a pista a cada pixel de resize seria desperdício
+    redimensiona = setTimeout(montaPista, 200);
   }
 
   // ==========================================================================
@@ -549,6 +576,6 @@
   montaChips();
   repinta();
   ajustaTopo();
-  window.addEventListener('resize', ajustaTopo);
+  window.addEventListener('resize', aoRedimensionar);
   document.fonts?.ready.then(ajustaTopo);
 })();
